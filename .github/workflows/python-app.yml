@@ -1,0 +1,86 @@
+name: CI/CD Pipeline - Homologação e Produção
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+
+env:
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-app
+
+jobs:
+
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v3
+
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build e Push da imagem no Docker Hub
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:latest
+
+  Deploy_Homologacao:
+    runs-on: ubuntu-latest
+    needs: Build
+    if: github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: Deploy na EC2 de Homologação
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOMOL_HOST }}
+          username: ${{ secrets.HOMOL_USERNAME }}
+          key: ${{ secrets.HOMOL_SSH_KEY }}
+          script: |
+            docker pull ${{ env.IMAGE_NAME }}:latest
+            docker stop fastapi-homol || true
+            docker rm fastapi-homol || true
+            docker run -d \
+              --name fastapi-homol \
+              --restart always \
+              -p 8080:8000 \
+              ${{ env.IMAGE_NAME }}:latest
+            echo "Deploy Homologacao concluido!"
+
+  Aprovacao_Producao:
+    runs-on: ubuntu-latest
+    needs: Build
+    if: github.ref == 'refs/heads/main'
+    environment: producao
+
+    steps:
+      - name: Aprovação recebida — seguindo para produção
+        run: echo "Aprovado! Iniciando deploy em producao..."
+
+  Deploy_Producao:
+    runs-on: ubuntu-latest
+    needs: Aprovacao_Producao
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy na EC2 de Produção
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USERNAME }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            docker pull ${{ env.IMAGE_NAME }}:latest
+            docker stop fastapi-prd || true
+            docker rm fastapi-prd || true
+            docker run -d \
+              --name fastapi-prd \
+              --restart always \
+              -p 8080:8000 \
+              ${{ env.IMAGE_NAME }}:latest
+            echo "Deploy Producao concluido!"
