@@ -42,6 +42,7 @@ jobs:
           username: ${{ secrets.HOMOL_USERNAME }}
           key: ${{ secrets.HOMOL_SSH_KEY }}
           script: |
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
             docker pull ${{ env.IMAGE_NAME }}:latest
             docker stop fastapi-homol || true
             docker rm fastapi-homol || true
@@ -50,7 +51,9 @@ jobs:
               --restart always \
               -p 8080:8000 \
               ${{ env.IMAGE_NAME }}:latest
-            echo "Deploy Homologacao concluido!"
+            docker image prune -f
+
+            echo "Deploy de Homologação finalizado com sucesso!"
 
   Aprovacao_Producao:
     runs-on: ubuntu-latest
@@ -75,6 +78,7 @@ jobs:
           username: ${{ secrets.PROD_USERNAME }}
           key: ${{ secrets.PROD_SSH_KEY }}
           script: |
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
             docker pull ${{ env.IMAGE_NAME }}:latest
             docker stop fastapi-prd || true
             docker rm fastapi-prd || true
@@ -83,4 +87,6 @@ jobs:
               --restart always \
               -p 8080:8000 \
               ${{ env.IMAGE_NAME }}:latest
-            echo "Deploy Producao concluido!"
+            docker image prune -f
+
+            echo "Deploy na Produção finalizado com sucesso!"
